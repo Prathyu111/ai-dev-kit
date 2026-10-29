@@ -6,7 +6,7 @@ import { createGateway } from "./task2/gateway.js";
 import { loadTokenMap } from "./task2/auth.js";
 import { redactText, StreamingPiiRedactor } from "./task3/redactor.js";
 import { createMockUpstream } from "./task4/mock-upstream.js";
-import { openUsageDatabase, TokenRateLimiter } from "./task4/rate-limiter.js";
+import { closeUsageDatabase, openUsageDatabase, TokenRateLimiter } from "./task4/rate-limiter.js";
 import { routeCompletion } from "./task4/router.js";
 import { createCustomerServer } from "./task1/server.js";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -131,8 +131,8 @@ async function task4(): Promise<void> {
   } finally {
     await shutdown(primary);
     await shutdown(secondary);
-    db.close();
-    rmSync(directory, { recursive: true, force: true });
+    closeUsageDatabase(db);
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 }
 

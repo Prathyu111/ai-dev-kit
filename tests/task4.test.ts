@@ -1,22 +1,25 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { estimateRequestTokens } from "../src/task4/estimate.js";
 import { TOKEN_LIMIT_PER_MINUTE, UPSTREAM_TIMEOUT_MS, WINDOW_MS } from "../src/task4/errors.js";
 import { createModelGateway } from "../src/task4/gateway.js";
 import { createMockUpstream } from "../src/task4/mock-upstream.js";
-import { hashApiKey, openUsageDatabase, TokenRateLimiter } from "../src/task4/rate-limiter.js";
+import { closeUsageDatabase, hashApiKey, openUsageDatabase, TokenRateLimiter } from "../src/task4/rate-limiter.js";
 import { routeCompletion } from "../src/task4/router.js";
 import { close, listen, postJson } from "./helpers.js";
 
 const directories: string[] = [];
+const databases: DatabaseSync[] = [];
 const servers: Array<import("node:http").Server> = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => close(server)));
+  for (const db of databases.splice(0)) closeUsageDatabase(db);
   for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
 
@@ -24,7 +27,9 @@ function database() {
   const directory = mkdtempSync(join(tmpdir(), "quilr-usage-"));
   directories.push(directory);
   const filename = join(directory, "usage.sqlite");
-  return { filename, db: openUsageDatabase(filename) };
+  const db = openUsageDatabase(filename);
+  databases.push(db);
+  return { filename, db };
 }
 
 const prompt = { messages: [{ role: "user", content: "hello" }], max_tokens: 20 };
@@ -72,13 +77,13 @@ describe("task 4 token window", () => {
     expect(limiter.usage("shared")).toBe(900);
 
     const persisted = openUsageDatabase(filename);
+    databases.push(persisted);
     const second = new TokenRateLimiter(persisted, { limit: 1_000, now: () => 5_000 });
     expect(second.reserve("shared", 300).ok).toBe(false);
     db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
     const bytes = readFileSync(filename);
     expect(bytes.includes(Buffer.from("shared"))).toBe(false);
     expect(bytes.includes(Buffer.from(hashApiKey("shared")))).toBe(true);
-    db.close();
   });
 
   it("replaces the estimate with reported usage and releases the reservation on failure", () => {

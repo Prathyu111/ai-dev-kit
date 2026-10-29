@@ -3,7 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { getCustomer, listRefunds, triggerRefund } from "../src/task1/customers.js";
@@ -11,7 +11,11 @@ import { parseToolArguments } from "../src/task1/schemas.js";
 import { createCustomerServer } from "../src/task1/server.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const tsx = join(root, "node_modules", ".bin", "tsx");
+const tsxCli = createRequire(import.meta.url).resolve("tsx/cli");
+
+function tsxCommand(script: string): [string, string] {
+  return [tsxCli, script];
+}
 
 async function withClient<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -151,7 +155,10 @@ describe("task 1 MCP protocol", () => {
 
 describe("task 1 stdio isolation", () => {
   it("keeps stdout limited to JSON-RPC frames and writes logs to stderr", async () => {
-    const child = spawn(tsx, ["src/task1/main.ts"], { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, tsxCommand("src/task1/main.ts"), {
+      cwd: root,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     let stderr = "";
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
@@ -182,6 +189,10 @@ describe("task 1 stdio isolation", () => {
       child.once("exit", (code) => {
         clearTimeout(timer);
         reject(new Error(`server exited ${code}\nstderr=${stderr}`));
+      });
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
       });
     });
 
@@ -216,8 +227,11 @@ describe("task 1 stdio isolation", () => {
     try {
       await ready;
     } finally {
-      child.kill("SIGTERM");
-      await once(child, "exit").catch(() => undefined);
+      child.kill();
+      await Promise.race([
+        once(child, "exit").catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]);
     }
 
     expect(buffer.trim()).toBe("");
@@ -234,7 +248,7 @@ describe("task 1 stdio isolation", () => {
   });
 
   it("redirects console.log to stderr", async () => {
-    const child = spawn(tsx, ["tests/fixtures/stdout-guard-fixture.ts"], {
+    const child = spawn(process.execPath, tsxCommand("tests/fixtures/stdout-guard-fixture.ts"), {
       cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -248,7 +262,10 @@ describe("task 1 stdio isolation", () => {
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
-    const [code] = (await once(child, "exit")) as [number];
+    const code = await new Promise<number>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (exitCode) => resolve(exitCode ?? 1));
+    });
     expect(code).toBe(0);
     expect(stdout.trim()).toBe('{"jsonrpc":"2.0","method":"ping"}');
     expect(stdout).not.toContain("leaked-token");

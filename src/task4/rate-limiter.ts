@@ -47,6 +47,17 @@ export function openUsageDatabase(filename: string): DatabaseSync {
   return db;
 }
 
+/** Release the file lock. Windows refuses to delete a database that is still open. */
+export function closeUsageDatabase(db: DatabaseSync): void {
+  if (!db.isOpen) return;
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+  } catch {
+    // Closing still drops the lock when a checkpoint cannot run.
+  }
+  db.close();
+}
+
 /**
  * Token-aware sliding window. Check and insert run inside one IMMEDIATE
  * transaction so two gateway processes cannot both admit the same last token.
