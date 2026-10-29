@@ -1,0 +1,36 @@
+{
+  "name": "quilr-field-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuilrAI field assessment: MCP server, MCP security gateway, streaming PII guardrail, and SQLite model router.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--disable-warning=ExperimentalWarning\" vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && npm test",
+    "demo": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--disable-warning=ExperimentalWarning\" tsx src/demo.ts",
+    "task1": "tsx src/task1/main.ts",
+    "task1:call": "tsx src/task1/call.ts",
+    "task2:downstream": "tsx src/task2/downstream.ts",
+    "task2:gateway": "tsx src/task2/gateway.ts",
+    "task3:provider": "tsx src/task3/mock-provider.ts",
+    "task3:gateway": "tsx src/task3/gateway.ts",
+    "task4:primary": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--disable-warning=ExperimentalWarning\" tsx src/task4/mock-upstream.ts",
+    "task4:secondary": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--disable-warning=ExperimentalWarning\" tsx src/task4/mock-upstream.ts",
+    "task4:gateway": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--disable-warning=ExperimentalWarning\" tsx src/task4/gateway.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
